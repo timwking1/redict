@@ -1,6 +1,6 @@
 
 # redict
-> A command line tool to refine a line-seperated dictionary to only words of a given length and output them to a new file.
+> A command line tool to refine a line-separated dictionary to only words of a given length and output them to a new file.
 
 
 **Usage:**
