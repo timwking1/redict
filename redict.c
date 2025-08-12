@@ -37,7 +37,7 @@ bool ValidateWordLenString(const char* str);
 bool ValidateWordLenInt(uint32_t wordLen);
 HDFILE* OpenFileHandle(const char* inFilePath, const char* outFilePath);
 void CloseFileHandle(HDFILE* file);
-uint32_t WriteNewDictionary(HDFILE* file, uint32_t wordLen);
+uint32_t WriteNewDictionary(const HDFILE* file, uint32_t wordLen);
 
 /*=============================================================================
 *   main [int]
@@ -53,26 +53,33 @@ int main(int argc, char** argv)
     if(!ValidateArgs(argc, argv))
     {
         PrintHelp();
-        return 1;
+        return EXIT_FAILURE;
     }
     char* endPtr;
     uint32_t wordLen = (uint32_t)strtoul(argv[ARG_WORDLEN], &endPtr, 10);
     if(*endPtr != '\0' || !ValidateWordLenInt(wordLen))
     {
         fprintf(stderr, "Invalid word length '%s'\n", argv[ARG_WORDLEN]);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     HDFILE* fileHandle = OpenFileHandle(argv[ARG_INPATH], argv[ARG_OUTPATH]);
     if(!fileHandle)
     {
-        return 1;
+        return EXIT_FAILURE;
     }
 
     uint32_t count = WriteNewDictionary(fileHandle, wordLen);
-    fprintf(stdout, "Wrote %zu words of length %u\n", count, wordLen);
+    if(count != 0)
+    {
+        fprintf(stdout, "Wrote %u words of length %u\n", count, wordLen);
+    }
+    else
+    {
+        fprintf(stdout, "Wrote zero words.\n");
+    }
     CloseFileHandle(fileHandle);
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 /*=============================================================================
@@ -163,7 +170,6 @@ bool ValidateWordLenInt(uint32_t wordLen)
 *
 *       const char* inFilePath  input file
 *       const char* outFilePath output file to be written
-*       uint32_t wordLen        length of word we want to check for
 *
 =============================================================================*/
 HDFILE* OpenFileHandle(const char* inFilePath, const char* outFilePath)
@@ -192,6 +198,8 @@ HDFILE* OpenFileHandle(const char* inFilePath, const char* outFilePath)
         fprintf(stderr, "Couldn't open file: %s\n", outFilePath);
         //Close previously opened input
         fclose(fpIn);
+        result->fpIn = NULL;
+        result->fpOut = NULL;
         free(result);
         return NULL;
     }
@@ -225,7 +233,7 @@ void CloseFileHandle(HDFILE* file)
 }
 
 /*=============================================================================
-*   WriteNewDictionary [void]
+*   WriteNewDictionary [uint32_t]
 *       Iterates each newline of the input file and discards any lines
 *       whose length doesn't match wordLen...
 *       Prints result to out file using fprintf
@@ -235,15 +243,25 @@ void CloseFileHandle(HDFILE* file)
 *                               that are kept in the output file
 *
 =============================================================================*/
-uint32_t WriteNewDictionary(HDFILE* file, uint32_t wordLen)
+uint32_t WriteNewDictionary(const HDFILE* file, uint32_t wordLen)
 {
     uint32_t writtenLines = 0;
     char buffer[MAX_WORDLEN + 2];
 
     while(fgets(buffer, sizeof(buffer), file->fpIn)) 
     {
-        uint32_t len = strlen(buffer);
+        //If there is no null terminator...
+        if(strchr(buffer, '\n') == NULL && !feof(file->fpIn))
+        {
+            int ch;
+            while((ch = fgetc(file->fpIn)) != '\n' && ch != EOF)
+            {
+                //Skip processing long line
+                continue;
+            }
+        }
 
+        uint32_t len = strlen(buffer);
         //Remove newline and carriage returns
         while(len > 0 && (buffer[len - 1] == '\n' || buffer[len - 1] == '\r')) 
         {
